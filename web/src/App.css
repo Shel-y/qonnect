@@ -897,3 +897,120 @@ button:focus-visible,
     padding-top: 14px;
   }
 }
+
+/* Markdown de las respuestas de Qonnect */
+.message-content {
+  margin-top: 7px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content p {
+  margin: 0 0 12px;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  color: #e4e9ff;
+  line-height: 1.35;
+  margin: 20px 0 9px;
+}
+
+.markdown-content h1 { font-size: 1.35em; }
+.markdown-content h2 { font-size: 1.2em; }
+.markdown-content h3 { font-size: 1.08em; }
+.markdown-content h4 { font-size: 1em; }
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 8px 0 14px;
+  padding-left: 24px;
+}
+
+.markdown-content li {
+  margin: 5px 0;
+  padding-left: 3px;
+}
+
+.markdown-content li > p {
+  margin: 3px 0;
+}
+
+.markdown-content strong {
+  color: #f0edff;
+}
+
+.markdown-content blockquote {
+  margin: 12px 0;
+  padding: 8px 13px;
+  border-left: 3px solid #8178e9;
+  color: #b8c2d8;
+  background: #ffffff08;
+}
+
+.markdown-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 12px;
+  border: 1px solid #9aa6d526;
+  border-radius: 8px;
+  background: #0d1423;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.markdown-content pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.markdown-content :not(pre) > code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #8178e922;
+  color: #d4ceff;
+  font-size: 0.92em;
+}
+
+.markdown-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 12px;
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 8px 10px;
+  border: 1px solid #9aa6d540;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: #8178e922;
+  color: #e4e9ff;
+}
+
+.markdown-content a {
+  color: #aaa2ff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.markdown-content hr {
+  border: 0;
+  border-top: 1px solid #9aa6d540;
+  margin: 16px 0;
+}

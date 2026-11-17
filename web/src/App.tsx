@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import './App.css'
 
 type Message = {
@@ -448,7 +450,15 @@ function App() {
                       <div className="message-author">
                         {message.role === 'user' ? 'TÚ' : 'QONNECT'}
                       </div>
-                      <p>{message.content}</p>
+                      {message.role === 'assistant' ? (
+                        <div className="message-content markdown-content">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p>{message.content}</p>
+                      )}
                       {message.role === 'user' && (
                         <button
                           className="save-problem"
