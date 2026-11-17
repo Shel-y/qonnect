@@ -1,0 +1,12 @@
+# Dependencias directas del servidor MCP (Bedrock AgentCore)
+# Target: Python 3.13, ARM64
+# Generado para: strands-quantum-agentcore-demo/mcp_server/server.py
+#
+# NOTA: strands-quantum-lab no se referencia aquí como ruta editable.
+# Para AgentCore, el paquete se empaquetará como parte del artefacto de despliegue.
+# Las dependencias transitivas (numpy, scipy, numba, llvmlite, networkx, etc.)
+# se resuelven a partir de amazon-braket-sdk y sus extras.
+mcp==2.3.0
+strands-agents==1.65.0
+boto3==1.44.3
+amazon-braket-sdk==1.127.8

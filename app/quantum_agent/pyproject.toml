@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quantum-agent"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "strands-agents==1.65.0",
+    "boto3==1.44.3",
+    "bedrock-agentcore==1.26.0",
+    "mcp-proxy-for-aws==1.8.0",
+    "aws-opentelemetry-distro~=0.21.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quantum-mcp"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "mcp==2.3.0",
+    "strands-agents==1.65.0",
+    "boto3==1.44.3",
+    "amazon-braket-sdk==1.127.8",
+    "bedrock-agentcore==1.26.0",
+    "aws-opentelemetry-distro~=0.21.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["strands_quantum_lab"]

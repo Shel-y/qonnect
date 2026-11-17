@@ -1,0 +1,7 @@
+# Dependencias directas del agente Strands (Bedrock AgentCore)
+# Target: Python 3.13, ARM64
+# Generado para: strands-quantum-agentcore-demo/deployment/agent/main.py
+strands-agents==1.65.0
+boto3==1.44.3
+bedrock-agentcore==1.26.0
+mcp-proxy-for-aws==1.8.0

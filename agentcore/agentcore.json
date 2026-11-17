@@ -1,0 +1,25 @@
+{
+  "name": "qonnect",
+  "version": 2,
+  "managedBy": "CDK",
+  "runtimes": [
+    {
+      "name": "quantum_mcp",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "app/quantum_mcp",
+      "runtimeVersion": "PYTHON_3_13",
+      "protocol": "MCP",
+      "authorizerType": "AWS_IAM"
+    }
+  ],
+  "memories": [],
+  "knowledgeBases": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": [],
+  "agentCoreGateways": [],
+  "policyEngines": [],
+  "configBundles": [],
+  "harnesses": []
+}
