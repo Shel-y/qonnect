@@ -73,7 +73,7 @@ Make quantum computing capabilities easier to explore, integrate, and use throug
 
 **Joselyn Lagunas**
 
-Emerging Technologies & Innovation Advocate | AWS Community Builder
+Emerging Technologies Innovator | AWS Community Builder
 
 ## License
 
