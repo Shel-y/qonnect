@@ -7,25 +7,6 @@ import time
 import uuid
 from typing import Any, Callable, NotRequired, TypedDict
 
-# TEMPORARY: AgentCore pydantic import diagnostics
-import importlib.machinery as _diag_machinery
-import importlib.util as _diag_util
-import platform as _diag_platform
-import sys as _diag_sys
-
-print("=== PYDANTIC RUNTIME DIAGNOSTICS ===", flush=True)
-print("Python:", _diag_sys.version, flush=True)
-print("Platform:", _diag_platform.platform(), flush=True)
-print("Machine:", _diag_platform.machine(), flush=True)
-print("Executable:", _diag_sys.executable, flush=True)
-print("Extension suffixes:", _diag_machinery.EXTENSION_SUFFIXES, flush=True)
-print("sys.path:", _diag_sys.path, flush=True)
-_diag_spec = _diag_util.find_spec("pydantic_core._pydantic_core")
-print("Native module spec:", _diag_spec, flush=True)
-print("Native module origin:", getattr(_diag_spec, "origin", None), flush=True)
-print("Native module loader:", type(_diag_spec.loader).__name__ if _diag_spec else None, flush=True)
-print("=== END PYDANTIC RUNTIME DIAGNOSTICS ===", flush=True)
-
 from mcp.server.mcpserver import MCPServer
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -96,23 +77,47 @@ def _execute(
     else:
         outcome = "completed"
 
-    prov = provenance.compute(tool_name, result, store, outcome)
+    try:
+        prov = provenance.compute(tool_name, result, store, outcome)
+    except Exception as exc:
+        print(
+            f"[MCP EXEC] PROVENANCE ERROR | tool={tool_name} "
+            f"| error={type(exc).__name__}: {exc}",
+            flush=True,
+        )
+        prov = {
+            "label": "none",
+            "components": {},
+            "executed_on": None,
+            "evidence": "Provenance verification failed.",
+            "reported_by_operation": result.get("provenance"),
+            "consistent_with_operation": None,
+            "assigned_by": "strands-quantum-lab:provenance-hook",
+        }
+
     result = {**result, "provenance": prov}
 
     reason = None
     if outcome != "completed":
         reason = result.get("message") or result.get("error")
 
-    notebook.record(
-        tool_use_id=tool_use_id,
-        tool=tool_name,
-        status=outcome,
-        params=params,
-        payload=result,
-        provenance=prov,
-        duration_s=duration,
-        reason=reason,
-    )
+    try:
+        notebook.record(
+            tool_use_id=tool_use_id,
+            tool=tool_name,
+            status=outcome,
+            params=params,
+            payload=result,
+            provenance=prov,
+            duration_s=duration,
+            reason=reason,
+        )
+    except Exception as exc:
+        print(
+            f"[MCP EXEC] NOTEBOOK ERROR | tool={tool_name} "
+            f"| error={type(exc).__name__}: {exc}",
+            flush=True,
+        )
     print(
     f"[MCP EXEC] END | tool={tool_name} "
     f"| status={outcome} "
@@ -216,24 +221,31 @@ def run_qaoa(
     seed: int = 7,
     device: str = "local",
 ) -> dict:
-    """Run QAOA on the local Braket simulator (classical simulation, not a QPU).
+    """Execute QAOA using the local Braket simulator (classical simulation, not a QPU).
 
-    WHEN: The user explicitly requests QAOA or quantum simulation.
+    WHEN: The user explicitly requests QAOA execution or quantum simulation.
 
     INPUT:
-    - problem_id: Real ID returned by formulate_problem.
+    - problem_id: Exact ID returned by formulate_problem.
     - layers: Range 1-3.
     - shots: Range 1-100000.
     - maxiter: Range 1-500.
     - seed: Random seed.
     - device: "local" only.
 
-    BEHAVIOR: Problems requiring more than 16 qubits are rejected.
-    Omit optional parameters unless the user specifies them.
+    SUCCESS AND OUTPUT:
+    - Continue only if the response confirms success (ok=true) and contains
+      a valid run_id.
+    - Preserve that run_id exactly as qaoa_run_id for hybrid_shortlist
+      or analyze_results.
+    - If the response reports an error, or no valid run_id is returned,
+      report the failure. Do not invent an ID or continue the QAOA workflow.
 
-    FLOW: Returns the field "run_id". Pass this exact value as qaoa_run_id
-    to hybrid_shortlist or analyze_results.
-    For a QAOA-only request, do not call those tools.
+    BEHAVIOR:
+    - Problems requiring more than 16 qubits are rejected.
+    - This tool executes QAOA; it does not perform classical refinement.
+    - Omit optional parameters unless the user specifies them.
+    - For a QAOA-only request, do not call hybrid_shortlist or analyze_results.
     """
     params = {
         "problem_id": problem_id,

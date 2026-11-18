@@ -153,7 +153,20 @@ function App() {
         }),
       })
 
-      const data = await response.json() as ChatResponse
+      let data: ChatResponse = {}
+      const responseText = await response.text()
+
+      try {
+        const parsed: unknown = JSON.parse(responseText)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          data = parsed as ChatResponse
+        }
+      } catch {
+        if (!response.ok) {
+          throw new Error(`Error del servidor (${response.status}).`)
+        }
+        throw new Error('La API devolvió una respuesta no válida.')
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -184,6 +197,19 @@ function App() {
       )
     } catch (err) {
       console.error('Error al comunicarse con Qonnect:', err)
+
+      setConversations((items) =>
+        items.flatMap((item) => {
+          if (item.id !== conversationId) return [item]
+
+          const messages = item.messages.filter(
+            (message) => message.id !== userMessage.id,
+          )
+
+          return messages.length ? [{ ...item, messages }] : []
+        }),
+      )
+      setPrompt(content)
 
       setError(
         err instanceof Error
