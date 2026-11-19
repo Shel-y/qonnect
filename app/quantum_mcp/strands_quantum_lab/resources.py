@@ -15,7 +15,7 @@ def estimate_resources(
     problem: SelectionProblem,
     layers: int = 1,
     shots: int = 1000,
-    circuit_evaluations: int = 60,
+    circuit_evaluations: int = 25,
     price_per_task_usd: float | None = None,
     price_per_shot_usd: float | None = None,
 ) -> dict:

@@ -102,18 +102,19 @@ class QuantumLabPlugin(Plugin):
         return lab.formulate_problem(self.store, items, budget, conflicts, name, description, problem_type)
 
     @tool
-    def solve_classical(self, problem_id: str, method: str = "exact", top_k: int = 1) -> dict:
+    def solve_classical(self, problem_id: str, method: str = "greedy", top_k: int = 1) -> dict:
         """Classical reference solution for a registered problem.
 
         Args:
             problem_id: Id returned by formulate_problem.
-            method: "exact" (exhaustive, optimal, small problems) or "greedy" (fast heuristic).
+            method: "greedy" (default, fast heuristic) or "exact" (exhaustive, optimal —
+                only use when the user explicitly asks for the optimal or exact solution).
             top_k: With method="exact", how many best solutions to return (1-20).
         """
         return lab.solve_classical(self.store, problem_id, method, top_k)
 
     @tool
-    def run_qaoa(self, problem_id: str, layers: int = 1, shots: int = 1000, maxiter: int = 60, seed: int = 7, device: str = "local") -> dict:
+    def run_qaoa(self, problem_id: str, layers: int = 1, shots: int = 1000, maxiter: int = 25, seed: int = 7, device: str = "local") -> dict:
         """Run QAOA (with its classical variational loop) on Amazon Braket LocalSimulator. Returns a run_id.
 
         LocalSimulator is a classical simulation of a quantum circuit, not quantum hardware.
@@ -122,7 +123,9 @@ class QuantumLabPlugin(Plugin):
             problem_id: Id returned by formulate_problem.
             layers: QAOA depth p (1-3).
             shots: Measurement shots for the final circuit (1-100000).
-            maxiter: Maximum iterations of the classical optimizer (1-500).
+            maxiter: Maximum iterations of the classical optimizer (1-500). Default is 25
+                (fast exploration). Use higher values only when the user asks for a more
+                thorough optimization.
             seed: Seed for the initial angles.
             device: "local" (Braket LocalSimulator). Paid devices (sv1, dm1, tn1, QPUs) are blocked by the cost guard
                 and are not implemented in this version.
@@ -159,7 +162,7 @@ class QuantumLabPlugin(Plugin):
         problem_id: str,
         layers: int = 1,
         shots: int = 1000,
-        circuit_evaluations: int = 60,
+        circuit_evaluations: int = 25,
         device: str = "local",
         price_per_task_usd: float | None = None,
         price_per_shot_usd: float | None = None,
@@ -172,7 +175,8 @@ class QuantumLabPlugin(Plugin):
             problem_id: Id returned by formulate_problem.
             layers: QAOA depth p (1-3).
             shots: Shots per circuit evaluation.
-            circuit_evaluations: Expected evaluations of the variational loop.
+            circuit_evaluations: Expected evaluations of the variational loop. Default is 25,
+                matching the default maxiter of run_qaoa.
             device: Target device label, recorded as given.
             price_per_task_usd: Current per-task price of the target device, if known.
             price_per_shot_usd: Current per-shot price of the target device, if known.

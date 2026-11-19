@@ -114,8 +114,8 @@ def formulate_problem(
 
 # 2 ---------------------------------------------------------------------------------------------------------------
 @_guard
-def solve_classical(store: LabStore, problem_id: str, method: str = "exact", top_k: int = 1) -> dict:
-    """Classical reference solution: exact enumeration (top_k best) or a fast greedy heuristic."""
+def solve_classical(store: LabStore, problem_id: str, method: str = "greedy", top_k: int = 1) -> dict:
+    """Classical reference solution: greedy heuristic (default) or exact enumeration (top_k best)."""
     sp = store.problem(problem_id)
     problem = sp.problem
     if method == "exact":
@@ -148,7 +148,7 @@ def run_qaoa(
     problem_id: str,
     layers: int = 1,
     shots: int = 1000,
-    maxiter: int = 60,
+    maxiter: int = 25,
     seed: int = 7,
     device: str = "local",
 ) -> dict:
@@ -308,7 +308,7 @@ def estimate_resources(
     problem_id: str,
     layers: int = 1,
     shots: int = 1000,
-    circuit_evaluations: int = 60,
+    circuit_evaluations: int = 25,
     device: str = "local",
     price_per_task_usd: float | None = None,
     price_per_shot_usd: float | None = None,

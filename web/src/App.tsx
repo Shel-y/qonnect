@@ -7,6 +7,8 @@ type Message = {
   id: number
   role: 'user' | 'assistant'
   content: string
+  /** True while the assistant is still streaming tokens for this message. */
+  streaming?: boolean
 }
 
 type Conversation = {
@@ -25,11 +27,6 @@ type SavedProblem = {
 
 type View = 'lab' | 'conversations' | 'saved'
 
-type ChatResponse = {
-  result?: string
-  error?: string
-}
-
 const suggestions = [
   { icon: '⌘', title: 'Formular un problema', description: 'Define elementos, beneficios y presupuesto.', prompt: 'Ayúdame a formular un problema de selección.' },
   { icon: '◈', title: 'Optimización clásica', description: 'Explora métodos exactos y greedy.', prompt: 'Quiero resolver un problema mediante optimización clásica.' },
@@ -46,6 +43,117 @@ function readStorage<T>(key: string): T {
   }
 }
 
+// ─── SSE stream reader ────────────────────────────────────────────────────────
+
+type SseEvent =
+  | { type: 'text'; text: string }
+  | { type: 'tool'; name: string; status: 'started' | 'done' }
+  | { type: 'done'; result: string }
+  | { type: 'error'; error: string }
+
+/**
+ * Parse a raw SSE `data:` line value into a typed event.
+ * Returns null for unparseable lines (comments, empty lines, unknown types).
+ */
+function parseSseLine(line: string): SseEvent | null {
+  if (!line.startsWith('data:')) return null
+  const json = line.slice('data:'.length).trim()
+  if (!json) return null
+  try {
+    const parsed: unknown = JSON.parse(json)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    const ev = parsed as Record<string, unknown>
+    if (ev.type === 'text' && typeof ev.text === 'string') {
+      return { type: 'text', text: ev.text }
+    }
+    if (ev.type === 'tool' && typeof ev.name === 'string') {
+      return { type: 'tool', name: ev.name, status: ev.status === 'started' ? 'started' : 'done' }
+    }
+    if (ev.type === 'done' && typeof ev.result === 'string') {
+      return { type: 'done', result: ev.result }
+    }
+    if (ev.type === 'error' && typeof ev.error === 'string') {
+      return { type: 'error', error: ev.error }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Read a Response whose body is an SSE stream and call `onEvent` for each
+ * parsed frame.  Resolves when the stream ends or a `done`/`error` event
+ * is received.  Rejects if the network read fails.
+ */
+async function readSseStream(
+  response: Response,
+  onEvent: (event: SseEvent) => void,
+): Promise<void> {
+  if (!response.body) {
+    // No stream body: fall back to reading the whole response as JSON.
+    const text = await response.text()
+    try {
+      const data = JSON.parse(text) as Record<string, unknown>
+      if (typeof data.result === 'string') {
+        onEvent({ type: 'done', result: data.result })
+      } else if (typeof data.error === 'string') {
+        onEvent({ type: 'error', error: data.error })
+      } else {
+        onEvent({ type: 'error', error: 'Invalid response from server.' })
+      }
+    } catch {
+      onEvent({ type: 'error', error: 'Server returned an invalid response.' })
+    }
+    return
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // SSE frames are separated by \n\n (or \r\n\r\n).
+      // Split on double newlines and process complete frames.
+      const frames = buffer.split(/\n\n|\r\n\r\n/)
+      // The last element may be an incomplete frame; keep it in the buffer.
+      buffer = frames.pop() ?? ''
+
+      for (const frame of frames) {
+        for (const line of frame.split(/\n|\r\n/)) {
+          const event = parseSseLine(line.trim())
+          if (event) {
+            onEvent(event)
+            if (event.type === 'done' || event.type === 'error') {
+              // Authoritative end: drain remaining buffer lines then stop.
+              reader.cancel().catch(() => undefined)
+              return
+            }
+          }
+        }
+      }
+    }
+
+    // Stream closed without a done/error event: try to parse anything left.
+    if (buffer.trim()) {
+      for (const line of buffer.split(/\n|\r\n/)) {
+        const event = parseSseLine(line.trim())
+        if (event) onEvent(event)
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function App() {
   const [conversations, setConversations] = useState<Conversation[]>(
     () => readStorage<Conversation[]>('qonnect-conversations'),
@@ -58,11 +166,12 @@ function App() {
   const [prompt, setPrompt] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
+  /** Tools currently running, shown during the streaming reply. */
+  const [activeTools, setActiveTools] = useState<string[]>([])
 
   const [actorId] = useState(() => {
     const stored = localStorage.getItem('qonnect-actor-id')
     if (stored) return stored
-
     const id = crypto.randomUUID()
     localStorage.setItem('qonnect-actor-id', id)
     return id
@@ -86,11 +195,51 @@ function App() {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // ── helpers for mutating a specific message in state ──────────────────────
+
+  const appendToMessage = (conversationId: string, msgId: number, text: string) => {
+    setConversations((items) =>
+      items.map((conv) => {
+        if (conv.id !== conversationId) return conv
+        return {
+          ...conv,
+          messages: conv.messages.map((msg) =>
+            msg.id === msgId ? { ...msg, content: msg.content + text } : msg,
+          ),
+        }
+      }),
+    )
+  }
+
+  const finalizeMessage = (
+    conversationId: string,
+    msgId: number,
+    finalContent: string,
+  ) => {
+    setConversations((items) =>
+      items.map((conv) => {
+        if (conv.id !== conversationId) return conv
+        return {
+          ...conv,
+          updatedAt: Date.now(),
+          messages: conv.messages.map((msg) =>
+            msg.id === msgId
+              ? { ...msg, content: finalContent || msg.content, streaming: false }
+              : msg,
+          ),
+        }
+      }),
+    )
+  }
+
+  // ── send ──────────────────────────────────────────────────────────────────
+
   const sendMessage = async () => {
     const content = prompt.trim()
     if (!content || isSending) return
 
     setError('')
+    setActiveTools([])
     setIsSending(true)
 
     const conversationId =
@@ -102,6 +251,16 @@ function App() {
       content,
     }
 
+    // Placeholder assistant message rendered immediately so the user sees
+    // tokens appear in place rather than after a delay.
+    const assistantMsgId = Date.now() + 1
+    const assistantPlaceholder: Message = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      streaming: true,
+    }
+
     const now = Date.now()
 
     if (currentId && currentConversation) {
@@ -110,7 +269,7 @@ function App() {
           item.id === conversationId
             ? {
                 ...item,
-                messages: [...item.messages, userMessage],
+                messages: [...item.messages, userMessage, assistantPlaceholder],
                 updatedAt: now,
               }
             : item,
@@ -121,7 +280,7 @@ function App() {
         {
           id: conversationId,
           title: content.slice(0, 55),
-          messages: [userMessage],
+          messages: [userMessage, assistantPlaceholder],
           updatedAt: now,
         },
         ...items,
@@ -143,9 +302,7 @@ function App() {
 
       const response = await fetch(`${apiUrl.replace(/\/$/, '')}/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: content,
           actor_id: actorId,
@@ -153,63 +310,65 @@ function App() {
         }),
       })
 
-      let data: ChatResponse = {}
-      const responseText = await response.text()
-
-      try {
-        const parsed: unknown = JSON.parse(responseText)
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          data = parsed as ChatResponse
-        }
-      } catch {
-        if (!response.ok) {
-          throw new Error(`Error del servidor (${response.status}).`)
-        }
-        throw new Error('La API devolvió una respuesta no válida.')
-      }
-
       if (!response.ok) {
-        throw new Error(
-          data.error || `Error del servidor (${response.status}).`,
-        )
+        // Try to read a JSON error body before throwing.
+        let errMsg = `Error del servidor (${response.status}).`
+        try {
+          const errData = JSON.parse(await response.text()) as Record<string, unknown>
+          if (typeof errData.error === 'string') errMsg = errData.error
+        } catch { /* ignore */ }
+        throw new Error(errMsg)
       }
 
-      if (typeof data.result !== 'string' || !data.result.trim()) {
-        throw new Error('El agente respondió, pero no devolvió un resultado válido.')
-      }
+      let finalResult = ''
 
-      const assistantMessage: Message = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: data.result,
-      }
+      await readSseStream(response, (event) => {
+        switch (event.type) {
+          case 'text':
+            appendToMessage(conversationId, assistantMsgId, event.text)
+            break
 
-      setConversations((items) =>
-        items.map((item) =>
-          item.id === conversationId
-            ? {
-                ...item,
-                messages: [...item.messages, assistantMessage],
-                updatedAt: Date.now(),
-              }
-            : item,
-        ),
-      )
+          case 'tool':
+            setActiveTools((tools) =>
+              event.status === 'started'
+                ? [...tools.filter((t) => t !== event.name), event.name]
+                : tools.filter((t) => t !== event.name),
+            )
+            break
+
+          case 'done':
+            finalResult = event.result
+            setActiveTools([])
+            break
+
+          case 'error':
+            throw new Error(event.error)
+        }
+      })
+
+      // Replace the streamed content with the authoritative final text.
+      // If finalResult is empty (stream ended without a done event), keep
+      // whatever was accumulated token by token.
+      finalizeMessage(conversationId, assistantMsgId, finalResult)
+
     } catch (err) {
       console.error('Error al comunicarse con Qonnect:', err)
 
+      // Remove the incomplete assistant placeholder and the user message,
+      // then restore the prompt so the user can retry.
       setConversations((items) =>
         items.flatMap((item) => {
           if (item.id !== conversationId) return [item]
 
-          const messages = item.messages.filter(
-            (message) => message.id !== userMessage.id,
+          const remaining = item.messages.filter(
+            (msg) => msg.id !== userMessage.id && msg.id !== assistantMsgId,
           )
 
-          return messages.length ? [{ ...item, messages }] : []
+          return remaining.length ? [{ ...item, messages: remaining }] : []
         }),
       )
       setPrompt(content)
+      setActiveTools([])
 
       setError(
         err instanceof Error
@@ -239,10 +398,8 @@ function App() {
 
   const saveProblem = (message: Message) => {
     if (!currentId) return
-
     setSavedProblems((items) => {
       if (items.some((item) => item.id === message.id)) return items
-
       return [
         {
           id: message.id,
@@ -478,9 +635,18 @@ function App() {
                       </div>
                       {message.role === 'assistant' ? (
                         <div className="message-content markdown-content">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {message.content}
-                          </ReactMarkdown>
+                          {message.streaming && !message.content ? (
+                            // No tokens yet: show the thinking indicator.
+                            <p>Qonnect está pensando…</p>
+                          ) : (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {message.content}
+                            </ReactMarkdown>
+                          )}
+                          {message.streaming && message.content && (
+                            // Blinking cursor while tokens are still arriving.
+                            <span className="stream-cursor" aria-hidden="true">▍</span>
+                          )}
                         </div>
                       ) : (
                         <p>{message.content}</p>
@@ -497,12 +663,14 @@ function App() {
                       )}
                     </article>
                   ))}
-                  {isSending && (
-                    <article className="message assistant">
-                      <div className="message-author">QONNECT</div>
-                      <p>Qonnect está pensando...</p>
-                    </article>
+
+                  {/* Tool activity indicator shown while streaming */}
+                  {isSending && activeTools.length > 0 && (
+                    <div className="tool-activity" aria-live="polite">
+                      ⚙ Usando: {activeTools.join(', ')}
+                    </div>
                   )}
+
                   <div ref={threadEndRef} />
                 </div>
               )}

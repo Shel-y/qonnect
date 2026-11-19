@@ -53,3 +53,8 @@ agentcore/aws-targets.json
 
 # Editor backup files
 *~
+
+# Local archives and editor snapshots
+*.zip.*
+*.before-*
+*.save

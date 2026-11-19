@@ -179,7 +179,7 @@ def formulate_problem(
 @server.tool()
 def solve_classical(
     problem_id: str,
-    method: str = "exact",
+    method: str = "greedy",
     top_k: int = 1,
 ) -> dict:
     """Solve a registered problem using a classical algorithm.
@@ -188,12 +188,15 @@ def solve_classical(
 
     INPUT:
     - problem_id: Real ID returned by formulate_problem in this conversation.
-    - method: "exact" (default, exhaustive search) or "greedy"
-    (fast heuristic, returns one solution).
+    - method: "greedy" (default, fast heuristic) or "exact" (exhaustive
+    search, exponential in the number of free items — only use when the user
+    explicitly asks for the optimal or exact solution).
     - top_k: Number of solutions, range 1-20, only meaningful for exact.
     Omit unless requested.
 
-    BEHAVIOR: If no real problem_id is available, call formulate_problem first.
+    BEHAVIOR: Use "greedy" by default. Only switch to "exact" when the user
+    explicitly asks for the optimal, exact, or best-possible solution.
+    If no real problem_id is available, call formulate_problem first.
     Never send an empty or invented problem_id. This tool works independently
     of QAOA.
 
@@ -217,7 +220,7 @@ def run_qaoa(
     problem_id: str,
     layers: int = 1,
     shots: int = 1000,
-    maxiter: int = 60,
+    maxiter: int = 25,
     seed: int = 7,
     device: str = "local",
 ) -> dict:
@@ -229,7 +232,8 @@ def run_qaoa(
     - problem_id: Exact ID returned by formulate_problem.
     - layers: Range 1-3.
     - shots: Range 1-100000.
-    - maxiter: Range 1-500.
+    - maxiter: Range 1-500. Default is 25 (fast exploration). Use higher
+    values only when the user asks for a more thorough optimization.
     - seed: Random seed.
     - device: "local" only.
 
@@ -369,7 +373,7 @@ def estimate_resources(
     problem_id: str,
     layers: int = 1,
     shots: int = 1000,
-    circuit_evaluations: int = 60,
+    circuit_evaluations: int = 25,
     device: str = "local",
     price_per_task_usd: float | None = None,
     price_per_shot_usd: float | None = None,
@@ -382,6 +386,7 @@ def estimate_resources(
     - problem_id: Exact ID returned by formulate_problem.
     - layers: QAOA circuit depth, range 1-3.
     - shots, circuit_evaluations: Positive integers; omit unless specified.
+    Default circuit_evaluations (25) matches the default maxiter of run_qaoa.
     - device: Informational label; use "local". It does not select hardware.
     - price_per_task_usd, price_per_shot_usd: Optional actual prices
     provided by the user.

@@ -89,7 +89,7 @@ def run_qaoa(
     problem: SelectionProblem,
     layers: int = 1,
     shots: int = 1000,
-    maxiter: int = 60,
+    maxiter: int = 25,
     seed: int = 7,
     red: Reduction | None = None,
     qubo: Qubo | None = None,
