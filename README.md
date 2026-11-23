@@ -26,7 +26,7 @@
 <div align="center">
   <img
     src="https://github.com/Shel-y/qonnect/blob/f47611ab54b473818204c6a10a354d2769af28e6/assets/qonnect-demo.gif"
-    width="100%"
+    width="70%"
     alt="Qonnect Demo"
   />
 </div>
