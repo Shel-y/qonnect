@@ -134,19 +134,24 @@ This modular approach makes it possible to extend the system with additional too
 ## 📂 Project Structure
 
 ```text
+
 qonnect/
+├── agentcore/              # AgentCore configuration and deployment
 ├── app/
-│   ├── chat_backend/   # API and Lambda integration
-│   ├── quantum_agent/  # Strands AI agent
-│   └── quantum_mcp/    # MCP server and optimization tools
+│   ├── chat_backend/       # FastAPI backend and Lambda integration
+│   ├── quantum_agent/      # Strands AI agent
+│   └── quantum_mcp/        # MCP server and optimization tools
 │
-├── web/                # React + TypeScript frontend
+├── web/                    # React + TypeScript frontend
 │
 ├── assets/
 │   ├── qonnect-demo.gif
 │   └── qonnect-architecture.svg
 │
+├── .gitignore
+├── LICENSE
 └── README.md
+
 ```
 
 ---
